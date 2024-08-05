@@ -22,6 +22,7 @@ class CRDT:
 
     def add_neighbor(self, n):
         self.neighbors.add(n)
+        n.neighbors.add(self)
 
     def senders(self):
         senders = sorted(set([op.sender for op in self.ops]))
@@ -68,11 +69,12 @@ class CRDT:
     def tick(self):
         self.counter += 1
 
-    def flush(self):
-        for op in self.ops:
-            self.state
+    def __lt__(self, b):
+        return self.name < b.name
 
-    def _state(self):
+
+    def flush(self):
+        ''' flushes ops to the cache '''
         state = {}
 
         keys = sorted(set([op.key for op in self.ops]))
@@ -97,14 +99,22 @@ class CRDT:
         return self.state[k]
 
 
+#class RemoveCRDT:
+
+
+
 a = CRDT('a')
 b = CRDT('b')
+c = CRDT('b')
 a.add_neighbor(b)
-b.add_neighbor(a)
+a.add_neighbor(c)
+b.add_neighbor(c)
+
 
 def tick():
     a.tick()
     b.tick()
+    c.tick()
 
 a.put('hello', 'a')
 tick()
@@ -113,8 +123,10 @@ tick()
 a.put('hello', 'd')
 tick()
 b.put('hello', 'd2')
+c.put('hello', 'd3')
 
 #print(a.ops)
 
-print(a._state())
-print(b._state())
+print(a.flush())
+print(b.flush())
+print(c.flush())
