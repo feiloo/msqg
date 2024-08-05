@@ -10,27 +10,34 @@ class Op:
     sender_timestamp: int
 
 
-
 class CRDT:
     def __init__(self, name):
-        #self.state = {}
+        self.cache = {}
         # through position in ops, the messages are ordered/indexed
         self.ops = set()
         self.counter = 0
         self.name = name
+        
+        self.neighbors = set()
+
+    def add_neighbor(self, n):
+        self.neighbors.add(n)
 
     def senders(self):
-        senders = set([op.sender for op in self.ops])
+        senders = sorted(set([op.sender for op in self.ops]))
         return senders
 
     def timestamp(self):
         return self.counter
 
+    def lastop(self, sender):
+        return max(filter(lambda op: op.sender == sender, self.ops), 
+                key=lambda op: op.sender_timestamp)
+
     def avg_timestamp(self):
         lastops = []
         for s in self.senders():
-            lastop = max(filter(lambda op: op.sender == s, self.ops), key=lambda op: op.sender_timestamp)
-            lastops.append(lastop.sender_timestamp)
+            lastops.append(self.lastop(s).sender_timestamp)
 
         if lastops == []:
             return 0
@@ -42,6 +49,12 @@ class CRDT:
         c = self.counter
         msg = Op(key, value, self.name, c)
         self.ops.add(msg)
+
+        notify_neighbors = True
+        if notify_neighbors:
+            for n in sorted(self.neighbors):
+                n.update(key,value, self.name, c)
+
 
     def update(self, key, value, sender, c):
         msg = Op(key, value, sender, c)
@@ -62,11 +75,11 @@ class CRDT:
     def _state(self):
         state = {}
 
-        keys = set([op.key for op in self.ops])
+        keys = sorted(set([op.key for op in self.ops]))
         for k in keys:
             for s in self.senders():
                 # the value with the highest timestamp
-                lastop = max(filter(lambda op: op.sender == s, self.ops), key=lambda o: o.sender_timestamp)
+                lastop = self.lastop(s)
                 #if lastop.sender == self.name or lastop.sender_timestamp < self.timestamp() + 1:
                 if lastop.sender_timestamp < self.avg_timestamp() + 1:
                     state[k] = lastop.value
@@ -76,38 +89,32 @@ class CRDT:
                 else:
                     print(f'warning, {lastop} is too far ahead, ignoring')
 
+        self.cache = state
         return state
 
 
-    '''
     def get(self, k):
         return self.state[k]
-    '''
 
 
 a = CRDT('a')
 b = CRDT('b')
+a.add_neighbor(b)
+b.add_neighbor(a)
 
-content = 'hello'
+def tick():
+    a.tick()
+    b.tick()
 
 a.put('hello', 'a')
-a.tick()
-b.tick()
+tick()
 a.put('hello', 'b')
-a.tick()
-b.tick()
-
-a.update('hello', 'c', 'b', b.counter)
-
-a.tick()
-b.tick()
+tick()
 a.put('hello', 'd')
-a.tick()
-b.tick()
-a.update('hello', 'c', 'b', b.counter)
-b.tick()
-b.tick()
-a.update('hello', 'c', 'b', b.counter)
-print(a.ops)
+tick()
+b.put('hello', 'd2')
+
+#print(a.ops)
 
 print(a._state())
+print(b._state())
